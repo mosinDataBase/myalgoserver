@@ -3,6 +3,6 @@ services:
     name: apiserver
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip setuptools wheel build && pip install -r requirements.txt
     startCommand: python serverapp.py
-    runtime: python-3.10.12
+    runtime: python-3.10.13
