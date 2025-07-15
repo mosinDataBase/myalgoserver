@@ -1,0 +1,12 @@
+from flask import Blueprint, request, jsonify
+from app.services.quote_service import get_quotes_data, subscribe_live_tokens
+
+quotes_bp = Blueprint("quotes", __name__)
+
+@quotes_bp.route("/", methods=["POST"])
+def get_quotes():
+    return get_quotes_data(request)
+
+@quotes_bp.route("/livedata", methods=["POST"])
+def subscribe():
+    return subscribe_live_tokens(request)
