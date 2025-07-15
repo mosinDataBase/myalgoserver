@@ -1,6 +1,4 @@
-
-setuptools==65.5.1
-
+setuptools>=42
 wheel
 
 bidict==0.22.1
