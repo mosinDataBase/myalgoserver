@@ -11,7 +11,7 @@ from app.routes import register_routes
 from app.utils.socket_events import register_socket_events
 
 load_dotenv()
-
+#python serverapp.py
 app = Flask(__name__)
 
 CORS(app,
