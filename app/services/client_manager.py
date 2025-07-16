@@ -76,26 +76,30 @@ def verify_otp_and_prepare_data(mobile, otp):
     logger.info(f"[MASTER DATA] Loaded: {success}")
     return result
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from io import StringIO
+import urllib.request
+import pandas as pd
+
 def load_master_data():
     global combined_database
     required_columns = {"pSymbol", "pExchSeg", "pTrdSymbol", "pSymbolName", "pInstType", "lLotSize", "lExpiryDate"}
     dfs.clear()
 
-    logger.info(f"[LOAD DATA] Starting to load data from {len(file_paths)} files")
+    logger.info(f"[LOAD DATA] Starting threaded load from {len(file_paths)} files")
 
-    for file_path in file_paths:
+    def process_file(file_path):
         try:
-            logger.info(f"[LOADING FILE] {file_path}")
+            logger.info(f"[THREAD] Loading: {file_path}")
             with urllib.request.urlopen(file_path) as response:
                 content = response.read().decode("utf-8")
                 df = pd.read_csv(StringIO(content))
 
                 available = set(df.columns)
                 selected = list(required_columns & available)
-
                 if not selected:
-                    logger.warning(f"[SKIPPED] File {file_path} has none of the required columns.")
-                    continue
+                    logger.warning(f"[SKIPPED] No required columns in: {file_path}")
+                    return None
 
                 selected_df = df[selected]
                 seg = file_path.split("/")[-1].split(".")[0]
@@ -112,11 +116,19 @@ def load_master_data():
                             unit="s", errors="coerce"
                         )
 
-                dfs.append(selected_df)
-                logger.info(f"[PARSED] {seg} rows: {len(selected_df)}")
+                logger.info(f"[THREAD DONE] {seg} rows: {len(selected_df)}")
+                return selected_df
 
         except Exception as e:
             logger.error(f"[FAILED TO LOAD] {file_path} — Error: {e}")
+            return None
+
+    with ThreadPoolExecutor(max_workers=min(5, len(file_paths))) as executor:
+        futures = [executor.submit(process_file, fp) for fp in file_paths]
+        for future in as_completed(futures):
+            df = future.result()
+            if df is not None:
+                dfs.append(df)
 
     if dfs:
         combined_database = pd.concat(dfs, ignore_index=True)
@@ -125,3 +137,4 @@ def load_master_data():
 
     logger.warning("[NO DATA] No valid dataframes created.")
     return False
+
