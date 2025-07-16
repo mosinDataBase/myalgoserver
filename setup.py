@@ -3,7 +3,8 @@ from setuptools import setup, find_packages
 NAME = "neo-api-client"
 VERSION = "1.2.0"
 # To install the library, run the following
-#
+# python -m venv env (not required always)
+# env\Scripts\activate
 # python setup.py install
 
 REQUIRES = ['bidict==0.22.1', 'certifi==2022.12.7', 'idna==2.10', 'numpy==1.24.2', 'pyjsparser==2.7.1', 'PyJWT==2.6.0',

@@ -1,3 +1,4 @@
+import logging
 from neo_api_client import NeoAPI
 from app.utils.shared_state import clients, file_paths, dfs, combined_database
 from app.utils.socket_events import on_message
@@ -5,39 +6,52 @@ import pandas as pd
 from io import StringIO
 import urllib.request
 
+# ✅ Set up logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
 def create_client(mobile, password, consumer_key, consumer_secret):
+    logger.info(f"[CREATE CLIENT] Creating client for mobile: {mobile}")
     client = NeoAPI(
         consumer_key=consumer_key,
         consumer_secret=consumer_secret,
         environment='prod',
     )
     clients[mobile] = client
+    logger.info(f"[CLIENT STORED] Client created and stored for {mobile}")
     return client
+
 def verify_otp_and_prepare_data(mobile, otp):
+    logger.info(f"[VERIFY OTP] Verifying OTP for: {mobile}")
     user_entry = clients.get(mobile)
 
-    # ✅ Fix: extract client from dict if wrapped
     if isinstance(user_entry, dict):
         client = user_entry.get("client")
     else:
         client = user_entry
 
     if not client:
+        logger.error(f"[ERROR] No client found for mobile {mobile}")
         raise Exception("Client not found for mobile number.")
 
     result = client.session_2fa(OTP=otp)
     data = result.get("data", {})
 
     if not data or "token" not in data:
+        logger.error(f"[OTP FAIL] OTP verification failed for {mobile}")
         raise Exception("OTP verification failed")
+
+    logger.info(f"[OTP SUCCESS] Token received for {mobile}")
 
     # Set socket handlers
     client.on_message = on_message
-    client.on_open = lambda ws: print("✅ WebSocket connected.")
-    client.on_close = lambda ws: print("❌ WebSocket connection closed.")
-    client.on_error = lambda ws, error: print("[OnError]:", error)
+    client.on_open = lambda ws: logger.info(f"[WS OPEN] WebSocket connected for {mobile}")
+    client.on_close = lambda ws: logger.warning(f"[WS CLOSED] WebSocket connection closed for {mobile}")
+    client.on_error = lambda ws, error: logger.error(f"[WS ERROR] Error: {error}")
 
-    # ✅ Wrap client in dict for future use
     clients[mobile] = {
         "client": client,
         "token": data["token"],
@@ -48,21 +62,30 @@ def verify_otp_and_prepare_data(mobile, otp):
     file_paths.clear()
     dfs.clear()
 
-    for seg in segments:
-        path = client.scrip_master(seg)
-        file_paths.append(path)
+    logger.info(f"[SCRIP LOAD] Starting to fetch scrip masters for: {segments}")
 
-    _ = load_master_data()
+    for seg in segments:
+        try:
+            path = client.scrip_master(seg)
+            file_paths.append(path)
+            logger.info(f"[SCRIP FETCHED] Segment: {seg}, URL: {path}")
+        except Exception as e:
+            logger.error(f"[SCRIP FAIL] Segment: {seg}, Error: {e}")
+
+    success = load_master_data()
+    logger.info(f"[MASTER DATA] Loaded: {success}")
     return result
 
 def load_master_data():
-    global combined_database  # ✅ important!
-
+    global combined_database
     required_columns = {"pSymbol", "pExchSeg", "pTrdSymbol", "pSymbolName", "pInstType", "lLotSize", "lExpiryDate"}
     dfs.clear()
 
+    logger.info(f"[LOAD DATA] Starting to load data from {len(file_paths)} files")
+
     for file_path in file_paths:
         try:
+            logger.info(f"[LOADING FILE] {file_path}")
             with urllib.request.urlopen(file_path) as response:
                 content = response.read().decode("utf-8")
                 df = pd.read_csv(StringIO(content))
@@ -71,6 +94,7 @@ def load_master_data():
                 selected = list(required_columns & available)
 
                 if not selected:
+                    logger.warning(f"[SKIPPED] File {file_path} has none of the required columns.")
                     continue
 
                 selected_df = df[selected]
@@ -89,11 +113,15 @@ def load_master_data():
                         )
 
                 dfs.append(selected_df)
+                logger.info(f"[PARSED] {seg} rows: {len(selected_df)}")
+
         except Exception as e:
-            print(f"Failed to process: {e}")
+            logger.error(f"[FAILED TO LOAD] {file_path} — Error: {e}")
 
     if dfs:
-        combined_database = pd.concat(dfs, ignore_index=True)  # ✅ correct replacement
+        combined_database = pd.concat(dfs, ignore_index=True)
+        logger.info(f"[COMBINED DB] Total rows: {len(combined_database)}")
         return True
-    return False
 
+    logger.warning("[NO DATA] No valid dataframes created.")
+    return False
