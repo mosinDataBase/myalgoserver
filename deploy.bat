@@ -1,8 +1,6 @@
 @echo off
-echo "# MyAlgo" >> README.md
 echo "# myalgoserver" >> README.md
 git init
-git add README.md
 git add .
 git commit -m "logout added"
 git branch -M main
