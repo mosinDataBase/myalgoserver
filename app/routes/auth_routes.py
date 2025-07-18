@@ -3,7 +3,7 @@ from pprint import pprint
 import logging
 import time
 from app.services.client_manager import create_client, verify_otp_and_prepare_data, clients
-from app.utils.shared_state import file_paths, dfs, combined_database
+
 
 auth_bp = Blueprint("auth", __name__)
 logger = logging.getLogger(__name__)

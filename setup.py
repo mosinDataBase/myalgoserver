@@ -6,6 +6,8 @@ VERSION = "1.2.0"
 # python -m venv env (not required always)
 # env\Scripts\activate
 # python setup.py install
+# pip install -r requirements.txt
+
 
 REQUIRES = ['bidict==0.22.1', 'certifi==2022.12.7', 'idna==2.10', 'numpy==1.24.2', 'pyjsparser==2.7.1', 'PyJWT==2.6.0',
             'python-dateutil==2.8.2', 'python-dotenv==1.0.0', 'requests==2.25.1', 'six==1.16.0', 'urllib3==1.26.14',

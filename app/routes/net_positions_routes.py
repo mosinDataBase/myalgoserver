@@ -2,7 +2,7 @@
 import logging
 from flask import Blueprint, request, jsonify
 from app.utils.shared_state import clients
-from app.utils.socket_events import on_message
+from app.utils.socket_events import on_message,on_error,on_open,on_close
 
 net_positions_bp = Blueprint("net_positions", __name__)
 logger = logging.getLogger(__name__)
@@ -48,15 +48,18 @@ def get_net_positions():
                     })
             except Exception:
                 continue  # skip if parsing error
-
+            
         # 🔌 Subscribe to live feed for active tokens only
         if active_tokens:
             try:
                 client.subscribe(instrument_tokens=active_tokens, isIndex=False, isDepth=False)
-                client.on_message = on_message
-                client.on_open = lambda ws: logger.info(f"[WS OPEN] WebSocket connected for {mobile}")
-                client.on_close = lambda ws: logger.warning(f"[WS CLOSED] WebSocket connection closed for {mobile}")
-                client.on_error = lambda ws, error: logger.error(f"[WS ERROR] Error: {error}")
+               
+             # Set socket handlers
+                client.on_message = on_message  # called when message is received from websocket
+                client.on_error = on_error  # called when any error or exception occurs in code or websocket
+                client.on_close = on_close  # called when websocket connection is closed
+                client.on_open = on_open  # called when websocket successfully connects
+
             except Exception as e:
                 print("WebSocket subscribe failed:", e)
 

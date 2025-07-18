@@ -1,10 +1,12 @@
 import logging
 from neo_api_client import NeoAPI
-from app.utils.shared_state import clients, file_paths, dfs, combined_database
+from app.utils.shared_state import clients,file_paths, dfs, combined_database
 from app.utils.socket_events import on_message
 import pandas as pd
 from io import StringIO
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 # ✅ Set up logging
 logger = logging.getLogger(__name__)
@@ -45,13 +47,6 @@ def verify_otp_and_prepare_data(mobile, otp):
         raise Exception("OTP verification failed")
 
     logger.info(f"[OTP SUCCESS] Token received for {mobile}")
-
-    # Set socket handlers
-    client.on_message = on_message
-    client.on_open = lambda ws: logger.info(f"[WS OPEN] WebSocket connected for {mobile}")
-    client.on_close = lambda ws: logger.warning(f"[WS CLOSED] WebSocket connection closed for {mobile}")
-    client.on_error = lambda ws, error: logger.error(f"[WS ERROR] Error: {error}")
-
     clients[mobile] = {
         "client": client,
         "token": data["token"],
@@ -67,74 +62,87 @@ def verify_otp_and_prepare_data(mobile, otp):
     for seg in segments:
         try:
             path = client.scrip_master(seg)
-            file_paths.append(path)
+            file_paths.append((seg, path))  # store tuple: (segment_name, url)
             logger.info(f"[SCRIP FETCHED] Segment: {seg}, URL: {path}")
         except Exception as e:
             logger.error(f"[SCRIP FAIL] Segment: {seg}, Error: {e}")
 
-    success = load_master_data()
-    logger.info(f"[MASTER DATA] Loaded: {success}")
+    
     return result
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from io import StringIO
-import urllib.request
-import pandas as pd
+# def load_master_data():
+#     global bse_cm_database, cde_fo_database, mcx_fo_database, nse_cm_database, nse_fo_database
+#     required_columns = {"pSymbol", "pExchSeg", "pTrdSymbol", "pSymbolName", "pDesc","pInstType", "lLotSize", "lExpiryDate"}
 
-def load_master_data():
-    global combined_database
-    required_columns = {"pSymbol", "pExchSeg", "pTrdSymbol", "pSymbolName", "pInstType", "lLotSize", "lExpiryDate"}
-    dfs.clear()
+#     logger.info(f"[LOAD DATA] Starting threaded load from {len(file_paths)} files")
+#     print("file_paths: ",file_paths);
+#     def process_file(seg, file_path):
+#         try:
+#             logger.info(f"[THREAD] Loading: {file_path}")
+#             with urllib.request.urlopen(file_path) as response:
+#                 content = response.read().decode("utf-8")
+#                 df = pd.read_csv(StringIO(content))
 
-    logger.info(f"[LOAD DATA] Starting threaded load from {len(file_paths)} files")
+#                 available = set(df.columns)
+#                 selected = list(required_columns & available)
+#                 if not selected:
+#                     logger.warning(f"[SKIPPED] No required columns in: {file_path}")
+#                     return seg, None
 
-    def process_file(file_path):
-        try:
-            logger.info(f"[THREAD] Loading: {file_path}")
-            with urllib.request.urlopen(file_path) as response:
-                content = response.read().decode("utf-8")
-                df = pd.read_csv(StringIO(content))
+#                 selected_df = df[selected]
 
-                available = set(df.columns)
-                selected = list(required_columns & available)
-                if not selected:
-                    logger.warning(f"[SKIPPED] No required columns in: {file_path}")
-                    return None
+#                 if "lExpiryDate" in selected_df.columns:
+#                     if seg in ["nse_fo", "cde_fo"]:
+#                         selected_df["lExpiryDate"] = pd.to_datetime(
+#                             selected_df["lExpiryDate"] + 315513000,
+#                             unit="s", errors="coerce"
+#                         )
+#                     else:
+#                         selected_df["lExpiryDate"] = pd.to_datetime(
+#                             selected_df["lExpiryDate"],
+#                             unit="s", errors="coerce"
+#                         )
 
-                selected_df = df[selected]
-                seg = file_path.split("/")[-1].split(".")[0]
+#                 logger.info(f"[THREAD DONE] {seg} rows: {len(selected_df)}")
+#                 return seg, selected_df
 
-                if "lExpiryDate" in selected_df.columns:
-                    if seg in ["nse_fo", "cde_fo"]:
-                        selected_df["lExpiryDate"] = pd.to_datetime(
-                            selected_df["lExpiryDate"] + 315513000,
-                            unit="s", errors="coerce"
-                        )
-                    else:
-                        selected_df["lExpiryDate"] = pd.to_datetime(
-                            selected_df["lExpiryDate"],
-                            unit="s", errors="coerce"
-                        )
+#         except Exception as e:
+#             logger.error(f"[FAILED TO LOAD] {file_path} — Error: {e}")
+#             return seg, None
 
-                logger.info(f"[THREAD DONE] {seg} rows: {len(selected_df)}")
-                return selected_df
+#     with ThreadPoolExecutor(max_workers=min(5, len(file_paths))) as executor:
+#         futures = [
+#             executor.submit(process_file, seg, url)
+#             for seg, url in file_paths
+#         ]
+#         for future in as_completed(futures):
+#             seg, df = future.result()
+#             if df is not None:
+#                 if seg == "bse_cm":
+#                     bse_cm_database = df
+#                 elif seg == "cde_fo":
+#                     cde_fo_database = df
+#                 elif seg == "mcx_fo":
+#                     mcx_fo_database = df
+#                 elif seg == "nse_cm":
+#                     nse_cm_database = df
+#                 elif seg == "nse_fo":
+#                     nse_fo_database = df
 
-        except Exception as e:
-            logger.error(f"[FAILED TO LOAD] {file_path} — Error: {e}")
-            return None
+#     all_loaded = all([
+#     bse_cm_database is not None and not bse_cm_database.empty,
+#     cde_fo_database is not None and not cde_fo_database.empty,
+#     mcx_fo_database is not None and not mcx_fo_database.empty,
+#     nse_cm_database is not None and not nse_cm_database.empty,
+#     nse_fo_database is not None and not nse_fo_database.empty,
+#     ])
 
-    with ThreadPoolExecutor(max_workers=min(5, len(file_paths))) as executor:
-        futures = [executor.submit(process_file, fp) for fp in file_paths]
-        for future in as_completed(futures):
-            df = future.result()
-            if df is not None:
-                dfs.append(df)
 
-    if dfs:
-        combined_database = pd.concat(dfs, ignore_index=True)
-        logger.info(f"[COMBINED DB] Total rows: {len(combined_database)}")
-        return True
+#     if all_loaded:
+#         logger.info(f"[LOAD COMPLETE] At least one segment successfully loaded.")
+#         return True
+#     else:
+#         logger.warning("[NO DATA] No segment databases created.")
+#         return False
 
-    logger.warning("[NO DATA] No valid dataframes created.")
-    return False
 
