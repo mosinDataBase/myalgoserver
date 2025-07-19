@@ -5,6 +5,7 @@ from .socket_routes import socket_bp
 from .order_logs_routes import order_logs_bp
 from .net_positions_routes import net_positions_bp
 from .symbol_search import symbol_search_bp
+from .expiry_routes import expiry_bp
 
 def register_routes(app):
     app.register_blueprint(auth_bp, url_prefix="/auth")
@@ -14,6 +15,7 @@ def register_routes(app):
     app.register_blueprint(order_logs_bp, url_prefix="/execute-orders")
     app.register_blueprint(net_positions_bp, url_prefix="/net")
     app.register_blueprint(symbol_search_bp, url_prefix="/scriptsearch")
+    app.register_blueprint(expiry_bp, url_prefix="/expiry")
     
 
     

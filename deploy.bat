@@ -2,7 +2,7 @@
 echo "# myalgoserver" >> README.md
 git init
 git add .
-git commit -m "options data added"
+git commit -m "main index api added"
 git branch -M main
 REM git remote add origin https://github.com/mosinDataBase/myalgoserver.git
 git push -u origin main

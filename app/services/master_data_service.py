@@ -18,24 +18,6 @@ def load_master_data():
 
                 # Clean column names
                 df.columns = df.columns.str.strip().str.replace(";", "", regex=False)
-
-                # Optional: remove trailing semicolons from values
-                # df = df.applymap(lambda x: x.rstrip(";") if isinstance(x, str) else x)
-
-                # Attempt lExpiryDate conversion if exists
-                if "lExpiryDate" in df.columns:
-                    try:
-                        if seg in ["nse_fo", "cde_fo"]:
-                            df["lExpiryDate"] = pd.to_datetime(
-                                df["lExpiryDate"] + 315513000, unit="s", errors="coerce"
-                            )
-                        else:
-                            df["lExpiryDate"] = pd.to_datetime(
-                                df["lExpiryDate"], unit="s", errors="coerce"
-                            )
-                    except Exception as exp:
-                        logger.warning(f"[{seg}] Failed to convert lExpiryDate: {exp}")
-
                 print(f"[DEBUG] {seg} loaded with shape: {df.shape}")
                 return seg, df
 

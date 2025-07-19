@@ -1,6 +1,7 @@
 import pandas as pd
 
 clients = {}
+subscribed_tokens ={}
 dfs = []
 file_paths = []
 combined_database = pd.DataFrame()

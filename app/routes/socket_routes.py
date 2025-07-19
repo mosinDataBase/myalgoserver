@@ -1,7 +1,10 @@
 # app/routes/socket_routes.py
 
 from flask import Blueprint, request, jsonify
-from app.utils.shared_state import clients
+from app.utils.shared_state import clients, subscribed_tokens
+from app.utils.socket_events import unsubscribe_specific_token
+
+
 
 socket_bp = Blueprint("socket", __name__)
 
@@ -42,6 +45,34 @@ def unsubscribe_ws():
                 print("Unsubscribe error:", e)
 
         return jsonify({"status": "success", "unsubscribed_tokens": len(tokens)}), 200
+
+    except Exception as e:
+        return jsonify({"error": "Unexpected error", "details": str(e)}), 500
+
+
+@socket_bp.route("/unsubscribeOptions", methods=["POST"])
+def unsubscribe_option_tokens():
+    try:
+        data = request.get_json()
+        mobile = data.get("mobile")
+
+        if not mobile:
+            return jsonify({"error": "Missing mobile number"}), 400
+
+        if mobile not in clients:
+            return jsonify({"error": "User not logged in"}), 401
+
+        # Get list of tokens from shared state
+        token_list = subscribed_tokens.get(mobile, {}).get("optionsToken", [])
+        print("token_list is:",token_list)
+
+        if token_list:
+          unsubscribe_specific_token(mobile, token_list)
+
+        return jsonify({
+            "status": "success",
+            "unsubscribed_tokens": len(token_list)
+        }), 200
 
     except Exception as e:
         return jsonify({"error": "Unexpected error", "details": str(e)}), 500
