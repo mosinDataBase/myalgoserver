@@ -6,6 +6,10 @@ from .order_logs_routes import order_logs_bp
 from .net_positions_routes import net_positions_bp
 from .symbol_search import symbol_search_bp
 from .expiry_routes import expiry_bp
+from .place_order_routes import place_order_bp
+from .strategy_routes import strategy_bp
+
+
 
 def register_routes(app):
     app.register_blueprint(auth_bp, url_prefix="/auth")
@@ -16,6 +20,12 @@ def register_routes(app):
     app.register_blueprint(net_positions_bp, url_prefix="/net")
     app.register_blueprint(symbol_search_bp, url_prefix="/scriptsearch")
     app.register_blueprint(expiry_bp, url_prefix="/expiry")
+    app.register_blueprint(place_order_bp, url_prefix="/order")
+    app.register_blueprint(strategy_bp, url_prefix="/strategy")
+    
+    
+
+    
     
 
     

@@ -16,6 +16,7 @@ websocket-client==1.5.1
 websockets==8.1
 pandas==2.0.0
 flask
+schedule
 flask-cors
 flask-socketio
 eventlet

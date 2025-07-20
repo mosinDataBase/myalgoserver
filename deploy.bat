@@ -7,5 +7,5 @@ git branch -M main
 REM git remote add origin https://github.com/mosinDataBase/myalgoserver.git
 git push -u origin main
 
-echo === ✅ Deployment Complete ===
+echo ===  Deployment Complete ===
 pause
