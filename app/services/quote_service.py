@@ -5,7 +5,6 @@ import pandas as pd
 from app.utils.socket_events import on_message_live_option_chain_data, on_main_index_message,on_error, on_open, on_close
 from app.utils.logger import logger
 
-
 def get_tokens_for_quotes(symbol, expiry, segment, strike_price):
     logger.debug(f"Fetching tokens for symbol={symbol}, expiry={expiry}, segment={segment}, strike_price={strike_price}")
     
@@ -29,43 +28,67 @@ def get_tokens_for_quotes(symbol, expiry, segment, strike_price):
         logger.warning(f"Invalid expiry format: {expiry}")
         return [], pd.DataFrame(), []
 
-    df = df.dropna(subset=["pTrdSymbol", "pSymbolName", "dStrikePrice", "pInstType"]).copy()
-    df = df[df["pInstType"].isin(["OPTIDX", "OPTSTK"])]
-    df = df[df["pSymbolName"].str.upper() == symbol]
-    df = df[df["lExpiryDate"].astype(str) == str(expiry)]
-
-    df["dStrikePrice"] = pd.to_numeric(df["dStrikePrice"], errors="coerce") / 100
-    df = df.dropna(subset=["dStrikePrice"])
-
-    df_sorted = df.sort_values(by="dStrikePrice")
-    lower_df = df_sorted[df_sorted["dStrikePrice"] < strike_price].tail(25)
-    upper_df = df_sorted[df_sorted["dStrikePrice"] >= strike_price].head(25)
-    selected_df = pd.concat([lower_df, upper_df])
-
-    logger.debug(f"Selected {len(selected_df)} option contracts near strike price.")
-
     tokens = []
     metaData = []
 
-    for _, row in selected_df.iterrows():
-        tokens.append({
-            "instrument_token": str(row.get("pSymbol", "")),
-            "exchange_segment": str(row.get("pExchSeg", "")).lower()
-        })
+    # For FO segments: Apply options filtering
+    if segment.lower() in ["nse_fo", "cde_fo", "mcx_fo"]:
+        df = df.dropna(subset=["pTrdSymbol", "pSymbolName", "dStrikePrice", "pInstType"]).copy()
+        df = df[df["pInstType"].isin(["OPTIDX", "OPTSTK"])]
+        df = df[df["pSymbolName"].str.upper() == symbol]
+        df = df[df["lExpiryDate"].astype(str) == str(expiry)]
 
-        metaData.append({
-            "strikePrice": row.get("dStrikePrice", 0),
-            "optionType": row.get("pOptionType", ""),
-            "expiry": row.get("lExpiryDate", ""),
-            "tradingSymbol": row.get("pTrdSymbol", ""),
-            "symbolName": row.get("pSymbolName", ""),
-            "exchangeSegment": row.get("pExchSeg", "").lower(),
-            "lotSize": row.get("iLotSize", row.get("lLotSize", 0)),
-            "openInterest": row.get("dOpenInterest", 0),
-            "instrumentType": row.get("pInstType", "")
-        })
+        df["dStrikePrice"] = pd.to_numeric(df["dStrikePrice"], errors="coerce") / 100
+        df = df.dropna(subset=["dStrikePrice"])
 
-    return tokens, selected_df, metaData
+        df_sorted = df.sort_values(by="dStrikePrice")
+        lower_df = df_sorted[df_sorted["dStrikePrice"] < strike_price].tail(25)
+        upper_df = df_sorted[df_sorted["dStrikePrice"] >= strike_price].head(25)
+        selected_df = pd.concat([lower_df, upper_df])
+
+        logger.debug(f"Selected {len(selected_df)} option contracts near strike price.")
+
+        for _, row in selected_df.iterrows():
+            tokens.append({
+                "instrument_token": str(row.get("pSymbol", "")),
+                "exchange_segment": str(row.get("pExchSeg", "")).lower()
+            })
+
+            metaData.append({
+                "strikePrice": row.get("dStrikePrice", 0),
+                "optionType": row.get("pOptionType", ""),
+                "expiry": row.get("lExpiryDate", ""),
+                "tradingSymbol": row.get("pTrdSymbol", ""),
+                "symbolName": row.get("pSymbolName", ""),
+                "exchangeSegment": row.get("pExchSeg", "").lower(),
+                "lotSize": row.get("iLotSize", row.get("lLotSize", 0)),
+                "openInterest": row.get("dOpenInterest", 0),
+                "instrumentType": row.get("pInstType", "")
+            })
+
+        return tokens, selected_df, metaData
+
+    # For CM segments: simpler filtering without expiry/strike price
+    elif segment.lower() in ["nse_cm", "bse_cm"]:
+        df = df.dropna(subset=["pSymbol", "pSymbolName", "pExchSeg"]).copy()
+        df = df[df["pSymbolName"].str.upper() == symbol]
+
+        for _, row in df.iterrows():
+            tokens.append({
+                "instrument_token": str(row.get("pSymbol", "")),
+                "exchange_segment": str(row.get("pExchSeg", "")).lower()
+            })
+
+            metaData.append({
+                "symbolName": row.get("pSymbolName", ""),
+                "tradingSymbol": row.get("pTrdSymbol", ""),
+                "exchangeSegment": row.get("pExchSeg", "").lower()
+            })
+
+        logger.debug(f"Selected {len(tokens)} equity tokens for {symbol}")
+        return tokens, df, metaData
+
+    return [], pd.DataFrame(), []
 
 
 def get_and_clear_quotes():
@@ -95,20 +118,23 @@ def get_quotes_data(req):
             logger.warning(f"User not logged in: {mobile}")
             return jsonify({"error": "User not logged in"}), 401
 
-        tokens, selected_df, metaData = get_tokens_for_quotes(symbol, expiry, segment, strike_price)
+        tokens, selected_df, meta_data  = get_tokens_for_quotes(symbol, expiry, segment, strike_price)
+      
+        print("tokens: ",tokens)
         if not tokens:
             logger.warning(f"No tokens found for symbol={symbol} | expiry={expiry}")
             return jsonify({"error": "Symbol not found", "tokens": []}), 404
 
         user_client = user_data["client"]
-        # user_client.quotes(
-        #     instrument_tokens=tokens,
-        #     quote_type="",
-        #     isIndex=False,
-        #     session_token=user_data["token"],
-        #     sid=user_data["sid"],
-        #     server_id="server1"
-        # )
+        if segment == "nse_cm":
+            quoteRes = user_client.quotes(
+            instrument_tokens = tokens,
+            quote_type="",
+            isIndex=False,
+            session_token=user_data["token"],
+            sid=user_data["sid"],
+            server_id="server1"
+        )
 
         logger.info(f"Quotes requested from server for {len(tokens)} tokens")
         logger.debug(f"Tokens: {tokens}")
@@ -133,14 +159,15 @@ def get_quotes_data(req):
         return jsonify({
             "message": "Quotes subscription initiated",
             "tokens": tokens,
-            "metaData": metaData,
+            "quoteRes" : quoteRes,
+            
         }), 200
 
     except Exception as e:
         logger.error(f"Exception in get_quotes_data: {e}", exc_info=True)
         return jsonify({
             "error": str(e),
-            "metaData": metaData if 'metaData' in locals() else [],
+            
             "tokens": tokens if 'tokens' in locals() else []
         }), 500
 

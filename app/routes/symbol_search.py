@@ -33,15 +33,17 @@ def search_symbol():
         if segment == "nse_cm":
             filtered_data = []
             for item in resData:
+                print("item",item)
                 p_symbol_name = (item.get("pSymbolName") or "").strip().lower()
-                if item.get("pGroup") is None and p_symbol_name == query:
+                p_group = item.get("pGroup")
+                if query.lower() in p_symbol_name and p_group == "EQ":
                     filtered_data.append(item)
         elif segment == "nse_fo":
             filtered_data = [item for item in resData if item.get("pOptionType") is not None]
         else:
             filtered_data = resData
 
-        print("resData",resData)
+        #print("resData",resData)
     except Exception as e:
         print("Exception when calling scrip search api -> search_scrip:", e)
     return  Response(json.dumps(filtered_data, default=str), mimetype='application/json')
