@@ -127,7 +127,7 @@ def on_message_live_option_chain_data(message, mobile):
                 ) and 'tk' in item and 'e' in item
             ]
             if filtered_data:
-                socketio.emit("option_quotes_update", {
+                socketio.emit("option_data_update", {
                     "type": "stock_feed",
                     "data": filtered_data
                 }, room=mobile)
@@ -138,7 +138,7 @@ def on_message_live_option_chain_data(message, mobile):
                 if 'last_traded_price' in item and 'instrument_token' in item and 'exchange_segment' in item
             ]
             if filtered_data:
-                socketio.emit("quotes_quotes_update", {
+                socketio.emit("quotes_data_update", {
                     "type": "quotes",
                     "data": filtered_data
                 }, room=mobile)

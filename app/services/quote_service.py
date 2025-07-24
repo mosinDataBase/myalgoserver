@@ -106,6 +106,7 @@ def get_quotes_data(req):
         expiry = data.get("expiry")
         strike_price = float(data.get("strikePrice", 0))
         segment = data.get("segment", "").lower()
+        quoteRes = None
 
         logger.info(f"Quote request received | mobile={mobile} | symbol={symbol} | expiry={expiry} | segment={segment}")
 
